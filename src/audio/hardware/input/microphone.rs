@@ -42,10 +42,12 @@ impl AudioInputDevice for Microphone {
             panic!("Failed to get default input config: {}", err)
         })
     }
-    fn start_recording<E>(&self, output_path: Arc<dyn AsRef<path::Path> + Send + Sync>, error_callback: E)
+    fn start_recording<P, E>(&self, output_path: P, error_callback: E)
     where
+        P: AsRef<path::Path> + Send + Sync + 'static,
         E: FnMut(StreamError) + Send + 'static,
     {
+        let output_path: Arc<dyn AsRef<path::Path> + Send + Sync> = Arc::new(output_path);
         let time_len = 16usize;
         let time_len_half = 8usize;
         let predict_gate = 0.75f32;
