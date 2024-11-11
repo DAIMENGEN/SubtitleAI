@@ -1,0 +1,49 @@
+syntax = "proto3";
+package chat.service;
+
+service ChatService {
+  rpc CreateChat(CreateRequest)returns(CreateRespond);
+  rpc ChatSend (ChatRequest) returns (Empty);
+  rpc ChatListen(MeetingRoom) returns(stream  ChatRespond);
+}
+
+message Empty{
+
+}
+
+message CreateRequest{
+  string meeting_room = 1;
+  string password = 2;
+}
+message CreateRespond{
+  bool result = 1;
+  string message = 2;
+}
+
+message ChatRespond{
+  string speaker = 1;
+  int64 start = 2;
+  int64 end = 3;
+  repeated string target_language = 4;
+  repeated string translated_text = 5;
+  string tag = 6;
+  int64 tag64 = 7;
+  string origin_text = 8;
+}
+
+message MeetingRoom{
+  string meeting_room = 1;
+  string password = 2;
+}
+
+message ChatRequest{
+  string meeting_room = 1;
+  string speaker = 2;
+  int64 start = 3;
+  int64 end = 4;
+  int64 sample_rate = 5;
+  bytes audio_bytes = 6;
+  repeated string target_language = 7;
+  string tag = 8;
+  int64 tag64 = 9;
+}

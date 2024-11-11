@@ -1,0 +1,21 @@
+[package]
+name = "SubtitleAI"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4" # https://github.com/rust-lang/log
+clap = "4.5" # https://github.com/clap-rs/clap
+cpal = "0.15" # https://github.com/rustaudio/cpal
+egui = "0.29" # https://github.com/emilk/egui
+prost = "0.13" # https://github.com/tokio-rs/prost
+hound = "3.5" # https://github.com/ruuda/hound
+tonic = "0.12" # https://github.com/hyperium/tonic
+biquad = "0.4" # https://github.com/korken89/biquad-rs
+chrono = "0.4" # https://github.com/chronotope/chrono
+simplelog = "0.12" # https://github.com/drakulix/simplelog.rs
+voice_activity_detector = "0.1" # https://github.com/nkeenan38/voice_activity_detector
+tokio = { version = "1", features = ["full"] } # https://github.com/tokio-rs/tokio
+
+[build-dependencies]
+tonic-build = "0.12" # Tonic code generator for gRPC service definitions
