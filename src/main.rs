@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (index, microphone) in microphones.iter().enumerate() {
         info!("{}: {}", index, microphone.get_device_name());
     }
-    let microphone = &microphones[0];
+    let microphone = &microphones[1];
     microphone.start_recording(target_file_path.to_str().unwrap().to_string());
     Ok(())
 }

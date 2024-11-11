@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::path;
+use std::{path, thread};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,48 +44,36 @@ impl AudioInputDevice for Microphone {
     }
     fn start_recording(&self, output_path: String) -> () {
         let output_path: Arc<dyn AsRef<path::Path> + Send + Sync> = Arc::new(output_path);
-        let time_len = 16usize;
-        let time_len_half = 8usize;
-        let predict_gate = 0.75f32;
-        let sample_rate = self.get_device_sample_rate();
         let sample_format = self.get_device_sample_format();
         let input_config = self.get_default_input_config();
-
-        let mut vad = voice_activity_detector::VoiceActivityDetector::builder()
-            .sample_rate(sample_rate).chunk_size(1024usize).build().unwrap();
 
         let mut stream: Option<Stream> = None;
         let mut wav_writer: Option<SharedWavWriter> = None;
 
         match sample_format {
             SampleFormat::F32 => {
-                let mut data_buf = VecDeque::<(f32, Vec<f32>)>::new();
+                let mut data_buf = VecDeque::<Vec<f32>>::new();
                 stream = Some(self.device.build_input_stream(
                     &input_config.clone().into(),
                     move |data: &[f32], _: &InputCallbackInfo| {
                         let data = Vec::from(data);
-                        let predict = vad.predict(data.clone());
-                        info!("Predict: {}", predict);
-                        data_buf.push_front((predict, data));
+                        data_buf.push_front(data);
 
-                        if data_buf.len() > time_len_half && predict > predict_gate && wav_writer.is_none() {
+                        if data_buf.len() > 10 && wav_writer.is_none() {
                             let local: chrono::DateTime<Local> = Local::now();
                             let filename = format!("{}.wav", local.format("%Y%m%d %H_%M_%S.%3f"));
                             let wav_spec = wav_writer::get_wav_spec(&input_config);
                             wav_writer = Some(wav_writer::get_wav_writer(output_path.as_ref().as_ref().join(filename), wav_spec));
                         }
 
-                        while data_buf.len() >= time_len && data_buf.iter().skip(data_buf.len() - time_len).filter(|(a, _)| *a < predict_gate).count() >= time_len_half {
-                            data_buf.pop_back();
-                        }
-
-                        if data_buf.len() > time_len && avg_compare(data_buf.iter().take(time_len).map(|t| t.0).collect()) {
+                        if data_buf.len() > 500 {
                             if let Some(writer) = &wav_writer {
                                 while !data_buf.is_empty() {
-                                    let it = data_buf.pop_back().unwrap().1;
+                                    let it = data_buf.pop_back().unwrap();
                                     wav_writer::write_audio_data_to_wav::<f32, f32>(writer, &it);
                                 }
                                 wav_writer = None;
+                                data_buf.clear();
                             }
                         }
                     },
@@ -104,16 +92,9 @@ impl AudioInputDevice for Microphone {
         match stream {
             Some(stream) => {
                 stream.play().unwrap();
+                thread::sleep(Duration::from_secs(100000));
             }
             None => panic!("Failed to create stream")
         }
     }
-}
-
-fn avg_compare(input: Vec<f32>) -> bool {
-    let n = 3;
-    let sum: f32 = input.iter().skip(n).sum(); // 计算所有元素的总和
-    let avg: f32 = sum / (input.len() as f32 - n as f32); // 计算平均值
-    // 这里假设需要比较平均值是否大于0，具体逻辑可以根据需求调整
-    input[0..n].iter().all(|&x| x <= avg * 0.75f32)
 }
