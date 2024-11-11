@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Local;
-use cpal::{Device, InputCallbackInfo, SampleFormat, SizedSample, Stream, StreamError, SupportedStreamConfig};
 use cpal::traits::{DeviceTrait, StreamTrait};
+use cpal::{Device, InputCallbackInfo, SampleFormat, SizedSample, Stream, StreamError, SupportedStreamConfig};
 use log::{error, info};
 
 use crate::audio::hardware::input::audio_input_device::AudioInputDevice;
@@ -42,11 +42,7 @@ impl AudioInputDevice for Microphone {
             panic!("Failed to get default input config: {}", err)
         })
     }
-    fn start_recording<P, E>(&self, output_path: P, error_callback: E)
-    where
-        P: AsRef<path::Path> + Send + Sync + 'static,
-        E: FnMut(StreamError) + Send + 'static,
-    {
+    fn start_recording(&self, output_path: String) -> () {
         let output_path: Arc<dyn AsRef<path::Path> + Send + Sync> = Arc::new(output_path);
         let time_len = 16usize;
         let time_len_half = 8usize;
@@ -92,9 +88,10 @@ impl AudioInputDevice for Microphone {
                                 wav_writer = None;
                             }
                         }
-                        todo!()
                     },
-                    error_callback,
+                    |error| {
+                        error!("Error: {}", error);
+                    },
                     None,
                 ).unwrap())
             }
