@@ -13,10 +13,10 @@ hound = "3.5" # https://github.com/ruuda/hound
 tonic = "0.12" # https://github.com/hyperium/tonic
 biquad = "0.4" # https://github.com/korken89/biquad-rs
 chrono = "0.4" # https://github.com/chronotope/chrono
-dasp = "0.11" # https://github.com/rustaudio/dasp.git
 simplelog = "0.12" # https://github.com/drakulix/simplelog.rs
 voice_activity_detector = "0.1" # https://github.com/nkeenan38/voice_activity_detector
 tokio = { version = "1", features = ["full"] } # https://github.com/tokio-rs/tokio
+dasp = {version = "0.11", features = ["interpolate","interpolate-linear", "signal", "window"]} # https://github.com/rustaudio/dasp.git
 
 [build-dependencies]
 tonic-build = "0.12" # Tonic code generator for gRPC service definitions

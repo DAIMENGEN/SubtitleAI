@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use cpal::FromSample;
 use hound::WavWriter;
-use log::{error, info, warn};
+use log::{error, warn};
 
 pub type SharedWavWriter = Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>;
 fn get_sample_format(format: cpal::SampleFormat) -> hound::SampleFormat {
@@ -42,7 +42,7 @@ pub fn get_wav_writer<P: AsRef<path::Path>>(filepath: P, spec: hound::WavSpec) -
     }
 }
 
-pub fn write_audio_data_to_wav<T, U>(writer: &SharedWavWriter, data: &[T])
+pub fn write_audio_data_to_wav<T, U>(writer: SharedWavWriter, data: &[T])
 where
     T: cpal::Sample,
     U: cpal::Sample + hound::Sample + FromSample<T>,
