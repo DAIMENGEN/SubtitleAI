@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 use crate::audio::filter::bandpass_filter::BandpassFilter;
 use crate::audio::processing::audio_segment::AudioSegment;
 use crate::audio::wav_writer;
+use crate::proto;
 
 #[derive(Clone)]
 pub struct Microphone {
@@ -126,10 +127,14 @@ impl Microphone {
         };
         match stream.play() {
             Ok(_) => {
-                let (async_handle, _) = self.save_audio_data(rx);
-                let (voice_result, ) = tokio::join!(async_handle);
+                let (async_handle, rx) = self.save_audio_data(rx);
+                let trans_handle = self.trans_audio_data(rx).await;
+                let (voice_result, trans_result) = tokio::join!(async_handle, trans_handle);
                 if let Err(e) = voice_result {
                     error!("Voice record task failed: {:?}", e);
+                }
+                if let Err(e) = trans_result {
+                    error!("Translation task failed: {:?}", e);
                 }
             }
             Err(error) => {
@@ -189,6 +194,39 @@ impl Microphone {
                 }
             }
         }), rx)
+    }
+
+    async fn trans_audio_data(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> JoinHandle<()> {
+        // let (tx, rx) = mpsc::channel::<String>(100);
+        let mut client = proto::chat_service_client::ChatServiceClient::connect("127.0.0.1:50051".to_string()).await.unwrap_or_else(|error| {
+            error!("Error connecting to server: {:?}", error);
+            panic!("Error connecting to server: {:?}", error)
+        });
+        tokio::spawn(async move {
+            while let Some(audio_data) = audio_data_rx.recv().await {
+                let timestamp = chrono::Utc::now().timestamp();
+                let bytes = audio_data.iter().flat_map(|&f| {
+                    let clamped = (f * 0.5 + 0.50) * 255.0;
+                    let clamped = clamped.clamp(0.0, 255.0) as u8;
+                    vec![clamped]
+                }).collect();
+                let request = tonic::Request::new(proto::ChatRequest {
+                    meeting_room: "room_name".to_string(),
+                    speaker: "speak_name".to_string(),
+                    start: timestamp,
+                    end: 0,
+                    sample_rate: Self::TARGET_SAMPLE_RATE as i64,
+                    audio_bytes: bytes,
+                    target_language: vec!["cmn".to_string(), "eng".to_string(), "jpn".to_string()],
+                    tag: "".to_string(),
+                    tag64: timestamp,
+                });
+                client.chat_send(request).await.unwrap_or_else(|error| {
+                    error!("Error translate audio data: {:?}", error);
+                    panic!("Error translate audio data: {:?}", error)
+                });
+            }
+        })
     }
 
     fn voice_activity_detector(&self) -> voice_activity_detector::VoiceActivityDetector {
