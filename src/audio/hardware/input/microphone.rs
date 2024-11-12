@@ -75,8 +75,7 @@ impl Microphone {
                             });
                             shared_data.extend(mono_data);
                         }
-                        let shared_data_len = shared_data.len();
-                        if shared_data_len >= 3072usize {
+                        if shared_data.len() >= 3072usize {
                             let mut resampled = if sample_rate != target_sample_rate {
                                 let interpolator = Linear::new(shared_data[0], shared_data[1]);
                                 let source = signal::from_iter(shared_data.iter().cloned());
@@ -85,7 +84,7 @@ impl Microphone {
                                     sample_rate as f64,
                                     target_sample_rate as f64,
                                 );
-                                resampled.take(shared_data_len * (target_sample_rate / sample_rate) as usize).collect()
+                                resampled.take(shared_data.len() * (target_sample_rate / sample_rate) as usize).collect()
                             } else {
                                 shared_data.to_vec()
                             };
