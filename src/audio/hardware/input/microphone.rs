@@ -63,9 +63,11 @@ impl Microphone {
         let mut shared_data: Vec<f32> = Vec::new();
         let stream = match sample_format {
             SampleFormat::F32 => {
+                info!("Using F32 sample format");
                 self.device.build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &InputCallbackInfo| {
+                        info!("Received {} samples", data.len());
                         if channels == 1 {
                             shared_data.extend_from_slice(data);
                         } else {
@@ -113,11 +115,15 @@ impl Microphone {
                 panic!("Unsupported sample format: {:?}", sample_format)
             }
         };
-        stream.play().unwrap_or_else(|error| {
-            error!("Error playing stream: {:?}", error);
-            panic!("Error playing stream: {:?}", error)
-        });
-        self.save_audio_data_to_wav(rx)
+        match stream.play() {
+            Ok(_) => {
+                self.save_audio_data_to_wav(rx)
+            }
+            Err(error) => {
+                error!("Error playing stream: {:?}", error);
+                panic!("Error playing stream: {:?}", error)
+            }
+        }
     }
 
     fn save_audio_data_to_wav(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<String>) {
@@ -141,6 +147,7 @@ impl Microphone {
             loop {
                 if let Some(audio_data) = audio_data_rx.recv().await {
                     let predict = vad_detector.predict(audio_data.clone());
+                    info!("Predict: {:?}", predict);
                     let audio_segment = AudioSegment::new(audio_data.clone(), predict);
                     audio_data_buffer.push_front(audio_segment);
                     while audio_data_buffer.len() > sample_length

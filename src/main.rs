@@ -1,3 +1,4 @@
+use std::error::Error;
 use log::{error, info, LevelFilter};
 use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
 
@@ -8,7 +9,7 @@ mod proto {
     include!("proto_gen/chat.service.rs");
 }
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn Error>> {
     TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
     let device_manager = AudioInputDeviceManager::new();
     let microphones = device_manager.get_available_microphones();

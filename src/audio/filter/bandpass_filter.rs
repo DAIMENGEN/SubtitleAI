@@ -8,8 +8,8 @@ impl BandpassFilter {
     pub fn new(sample_rate: u32, high_freq: f32, low_freq: f32) -> Self
     {
         let nyquist = sample_rate as f32 / 2.0;
-        let normalized_low_freq = (high_freq / nyquist).hz();
-        let normalized_high_freq = (low_freq / nyquist).hz();
+        let normalized_high_freq = (high_freq / nyquist).hz();
+        let normalized_low_freq = (low_freq / nyquist).hz();
         let cuffs = Coefficients::<f32>::from_params(
             Type::BandPass,       // Bandpass filter type
             normalized_high_freq,
