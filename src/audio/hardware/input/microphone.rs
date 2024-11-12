@@ -1,10 +1,10 @@
-use std::{env, fs};
 use std::collections::VecDeque;
+use std::{env, fs};
 
 use biquad::Biquad;
 use chrono::Local;
-use cpal::{Device, InputCallbackInfo, SampleFormat, SampleRate, StreamConfig, SupportedStreamConfig};
 use cpal::traits::{DeviceTrait, StreamTrait};
+use cpal::{Device, InputCallbackInfo, SampleFormat, StreamConfig};
 use dasp::{interpolate::linear::Linear, signal, Signal};
 use log::{error, info};
 use tokio::sync::mpsc;
@@ -32,19 +32,35 @@ impl Microphone {
         })
     }
     pub fn get_device_sample_format(&self) -> SampleFormat {
-        self.get_device_config().sample_format()
+        self.device.default_input_config().unwrap_or_else(|error| {
+            error!("Failed to get default input config: {}", error);
+            panic!("Failed to get default input config: {}", error)
+        }).sample_format()
     }
-    pub fn get_device_config(&self) -> SupportedStreamConfig {
-        self.device.default_input_config().unwrap_or_else(|err| {
-            error!("Failed to get default input config: {}", err);
-            panic!("Failed to get default input config: {}", err)
-        })
+    pub fn get_device_config(&self) -> StreamConfig {
+        match self.device.default_input_config() {
+            Ok(config) => StreamConfig {
+                channels: config.channels(),
+                sample_rate: config.sample_rate(),
+                buffer_size: cpal::BufferSize::Fixed(3072u32 * (config.channels() as u32)),
+            },
+            Err(error) => {
+                error!("Failed to get default input config: {}", error);
+                panic!("Failed to get default input config: {}", error)
+            }
+        }
     }
     pub fn get_device_channels(&self) -> u16 {
-        self.get_device_config().channels()
+        self.device.default_input_config().unwrap_or_else(|error| {
+            error!("Failed to get default input config: {}", error);
+            panic!("Failed to get default input config: {}", error)
+        }).channels()
     }
     pub fn get_device_sample_rate(&self) -> u32 {
-        self.get_device_config().sample_rate().0
+        self.device.default_input_config().unwrap_or_else(|error| {
+            error!("Failed to get default input config: {}", error);
+            panic!("Failed to get default input config: {}", error)
+        }).sample_rate().0
     }
     pub async fn start_record(&self) -> () {
         let (tx, rx) = mpsc::channel(100);
@@ -53,11 +69,7 @@ impl Microphone {
         let sample_rate = self.get_device_sample_rate();
         let target_sample_rate = Self::TARGET_SAMPLE_RATE;
         let sample_format = self.get_device_sample_format();
-        let config = StreamConfig {
-            channels,
-            sample_rate: SampleRate(sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(3072u32 * (channels as u32)),
-        };
+        let config = self.get_device_config();
         info!("Start recording on device: {}", name);
         info!("Device supported stream config: {:#?}", &config);
         let mut shared_data: Vec<f32> = Vec::new();
@@ -84,7 +96,8 @@ impl Microphone {
                                     sample_rate as f64,
                                     target_sample_rate as f64,
                                 );
-                                resampled.take(shared_data.len() * (target_sample_rate / sample_rate) as usize).collect()
+                                let number = shared_data.len() * target_sample_rate as usize / sample_rate as usize;
+                                resampled.take(number).collect()
                             } else {
                                 shared_data.to_vec()
                             };
@@ -116,7 +129,7 @@ impl Microphone {
         match stream.play() {
             Ok(_) => {
                 let (async_handle, _) = self.save_audio_data_to_wav(rx);
-                let (voice_result,) = tokio::join!(async_handle);
+                let (voice_result, ) = tokio::join!(async_handle);
                 if let Err(e) = voice_result {
                     error!("Voice record task failed: {:?}", e);
                 }
@@ -132,6 +145,8 @@ impl Microphone {
         let predict_gate = 0.75f32;
         let sample_length = 16usize;
         let sample_length_half = sample_length / 2;
+        let target_sample_rate = Self::TARGET_SAMPLE_RATE;
+        let sample_format = self.get_device_sample_format();
         let mut output_temp_dir = env::current_dir().unwrap_or_else(|error| {
             error!("Error getting current directory: {:?}", error);
             panic!("Error getting current directory: {:?}", error)
@@ -141,7 +156,6 @@ impl Microphone {
             error!("Error creating directory: {:?}", error);
             panic!("Error creating directory: {:?}", error)
         });
-        let input_config = self.get_device_config();
         let mut vad_detector = self.voice_activity_detector();
         (tokio::spawn(async move {
             let mut audio_data_buffer = VecDeque::<AudioSegment>::new();
@@ -161,7 +175,7 @@ impl Microphone {
                     if audio_data_buffer.len() >= sample_length && AudioSegment::is_pause(probabilities) {
                         let local: chrono::DateTime<Local> = Local::now();
                         let filename = format!("{}.wav", local.format("%Y%m%d %H_%M_%S.%3f"));
-                        let wav_spec = wav_writer::get_wav_spec(&input_config);
+                        let wav_spec = wav_writer::get_wav_spec(target_sample_rate, sample_format);
                         let writer = wav_writer::get_wav_writer(output_temp_dir.join(filename.clone()), wav_spec);
                         let audio_data: Vec<f32> = audio_data_buffer.iter().flat_map(|segment| segment.audio_data.clone()).collect();
                         wav_writer::write_audio_data_to_wav::<f32, f32>(writer, &audio_data);

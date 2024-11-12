@@ -1,26 +1,26 @@
-use std::{fs, path};
 use std::fs::File;
 use std::io::BufWriter;
 use std::sync::{Arc, Mutex};
+use std::{fs, path};
 
-use cpal::FromSample;
+use cpal::{FromSample, SampleFormat};
 use hound::WavWriter;
 use log::{error, warn};
 
 pub type SharedWavWriter = Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>;
-fn get_sample_format(format: cpal::SampleFormat) -> hound::SampleFormat {
+fn get_sample_format(format: SampleFormat) -> hound::SampleFormat {
     if format.is_float() {
         hound::SampleFormat::Float
     } else {
         hound::SampleFormat::Int
     }
 }
-pub fn get_wav_spec(config: &cpal::SupportedStreamConfig) -> hound::WavSpec {
+pub fn get_wav_spec(sample_rate: u32, sample_format: SampleFormat) -> hound::WavSpec {
     hound::WavSpec {
-        channels: config.channels() as _,
-        sample_rate: config.sample_rate().0 as _,
-        sample_format: get_sample_format(config.sample_format()),
-        bits_per_sample: (config.sample_format().sample_size() * 8) as _,
+        channels: 1,
+        sample_rate,
+        sample_format: get_sample_format(sample_format),
+        bits_per_sample: (sample_format.sample_size() * 8) as _,
     }
 }
 pub fn get_wav_writer<P: AsRef<path::Path>>(filepath: P, spec: hound::WavSpec) -> SharedWavWriter {
