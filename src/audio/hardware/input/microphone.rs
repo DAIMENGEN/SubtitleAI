@@ -46,7 +46,7 @@ impl Microphone {
     pub fn get_device_sample_rate(&self) -> u32 {
         self.get_device_config().sample_rate().0
     }
-    pub fn start_recording(&self) -> () {
+    pub fn start_record(&self) -> (JoinHandle<()>, Receiver<String>) {
         let (tx, rx) = mpsc::channel(100);
         let name = self.get_device_name();
         let channels = self.get_device_channels();
@@ -117,7 +117,7 @@ impl Microphone {
             error!("Error playing stream: {:?}", error);
             panic!("Error playing stream: {:?}", error)
         });
-        self.save_audio_data_to_wav(rx);
+        self.save_audio_data_to_wav(rx)
     }
 
     fn save_audio_data_to_wav(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<String>) {
