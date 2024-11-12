@@ -126,7 +126,7 @@ impl Microphone {
         };
         match stream.play() {
             Ok(_) => {
-                let (async_handle, _) = self.process_audio_data(rx);
+                let (async_handle, _) = self.save_audio_data(rx);
                 let (voice_result, ) = tokio::join!(async_handle);
                 if let Err(e) = voice_result {
                     error!("Voice record task failed: {:?}", e);
@@ -138,7 +138,7 @@ impl Microphone {
         }
     }
 
-    fn process_audio_data(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<Vec<f32>>) {
+    fn save_audio_data(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<Vec<f32>>) {
         let (tx, rx) = mpsc::channel::<Vec<f32>>(100);
         let predict_gate = 0.75f32;
         let sample_length = 16usize;
@@ -175,6 +175,7 @@ impl Microphone {
                         let filename = format!("{}.wav", local.format("%Y%m%d %H_%M_%S.%3f"));
                         let wav_spec = wav_writer::get_wav_spec(target_sample_rate, sample_format);
                         let writer = wav_writer::get_wav_writer(output_temp_dir.join(filename.clone()), wav_spec);
+                        info!("Save the audio data to : {}", filename);
                         while !audio_data_buffer.is_empty() {
                             let audio_data: Vec<f32> = audio_data_buffer.pop_back().unwrap().audio_data;
                             file_data.extend(audio_data);
