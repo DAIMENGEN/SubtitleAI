@@ -89,7 +89,6 @@ impl Microphone {
                             } else {
                                 shared_data.to_vec()
                             };
-                            shared_data.clear();
                             let mut bandpass_filter = BandpassFilter::new(target_sample_rate, 3000f32, 300f32);
                             for sample in resampled.iter_mut() {
                                 *sample = bandpass_filter.filter.run(*sample) * 2.0
@@ -98,6 +97,7 @@ impl Microphone {
                                 error!("Error sending data to channel: {:?}", error);
                                 panic!("Error sending data to channel: {:?}", error)
                             });
+                            shared_data.clear();
                         }
                     },
                     move |err| {
