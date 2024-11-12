@@ -46,7 +46,7 @@ impl Microphone {
     pub fn get_device_sample_rate(&self) -> u32 {
         self.get_device_config().sample_rate().0
     }
-    pub fn start_record(&self) -> (JoinHandle<()>, Receiver<String>) {
+    pub async fn start_record(&self) -> () {
         let (tx, rx) = mpsc::channel(100);
         let name = self.get_device_name();
         let channels = self.get_device_channels();
@@ -67,7 +67,6 @@ impl Microphone {
                 self.device.build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &InputCallbackInfo| {
-                        info!("Received {} samples", data.len());
                         if channels == 1 {
                             shared_data.extend_from_slice(data);
                         } else {
@@ -117,11 +116,14 @@ impl Microphone {
         };
         match stream.play() {
             Ok(_) => {
-                self.save_audio_data_to_wav(rx)
+                let (async_handle, _) = self.save_audio_data_to_wav(rx);
+                let (voice_result,) = tokio::join!(async_handle);
+                if let Err(e) = voice_result {
+                    error!("Voice record task failed: {:?}", e);
+                }
             }
             Err(error) => {
                 error!("Error playing stream: {:?}", error);
-                panic!("Error playing stream: {:?}", error)
             }
         }
     }

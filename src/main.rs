@@ -1,5 +1,6 @@
 use std::error::Error;
-use log::{error, info, LevelFilter};
+
+use log::{info, LevelFilter};
 use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
 
 use crate::audio::hardware::input::audio_input_device_manager::AudioInputDeviceManager;
@@ -17,10 +18,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     for (index, microphone) in microphones.iter().enumerate() {
         info!("{}: {}", index, microphone.get_device_name());
     }
-    let (async_handle, _) = microphones[0].start_record();
-    let (voice_result,) = tokio::join!(async_handle);
-    if let Err(e) = voice_result {
-        error!("Voice record task failed: {:?}", e);
-    }
+    microphones[0].start_record().await;
     Ok(())
 }
