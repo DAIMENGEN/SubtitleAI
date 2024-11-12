@@ -162,23 +162,24 @@ impl Microphone {
             loop {
                 if let Some(audio_data) = audio_data_rx.recv().await {
                     let predict = vad_detector.predict(audio_data.clone());
-                    info!("Predict: {:?}", predict);
                     let audio_segment = AudioSegment::new(audio_data.clone(), predict);
                     audio_data_buffer.push_front(audio_segment);
-                    while audio_data_buffer.len() > sample_length
+                    while audio_data_buffer.len() >= sample_length
                         && audio_data_buffer.iter()
                         .skip(audio_data_buffer.len() - sample_length).filter(|&segment| segment.speech_probability < predict_gate)
                         .count() >= sample_length_half {
                         audio_data_buffer.pop_back();
                     }
                     let probabilities = &audio_data_buffer.iter().take(sample_length).map(|segment| segment.speech_probability).collect::<Vec<_>>();
-                    if audio_data_buffer.len() >= sample_length && AudioSegment::is_pause(probabilities) {
+                    if audio_data_buffer.len() > sample_length && AudioSegment::is_pause(probabilities) {
                         let local: chrono::DateTime<Local> = Local::now();
                         let filename = format!("{}.wav", local.format("%Y%m%d %H_%M_%S.%3f"));
                         let wav_spec = wav_writer::get_wav_spec(target_sample_rate, sample_format);
                         let writer = wav_writer::get_wav_writer(output_temp_dir.join(filename.clone()), wav_spec);
-                        let audio_data: Vec<f32> = audio_data_buffer.iter().flat_map(|segment| segment.audio_data.clone()).collect();
-                        wav_writer::write_audio_data_to_wav::<f32, f32>(writer, &audio_data);
+                        while !audio_data_buffer.is_empty() {
+                            let audio_data = audio_data_buffer.pop_back().unwrap().audio_data;
+                            wav_writer::write_audio_data_to_wav::<f32, f32>(&writer, &audio_data);
+                        }
                         audio_data_buffer.clear();
                         tx.send(filename).await.unwrap_or_else(|error| {
                             error!("Error sending filename to channel: {:?}", error);
