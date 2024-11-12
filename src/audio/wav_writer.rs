@@ -42,7 +42,7 @@ pub fn get_wav_writer<P: AsRef<path::Path>>(filepath: P, spec: hound::WavSpec) -
     }
 }
 
-pub fn write_audio_data_to_wav<T, U>(writer: &SharedWavWriter, data: &[T])
+pub fn write_audio_data_to_wav<T, U>(writer: SharedWavWriter, data: &[T])
 where
     T: cpal::Sample,
     U: cpal::Sample + hound::Sample + FromSample<T>,

@@ -63,43 +63,41 @@ impl Microphone {
         }).sample_rate().0
     }
     pub async fn start_record(&self) -> () {
+        let config = self.get_device_config();
+        let microphone_name = self.get_device_name();
+        info!("Start recording sound using microphone : {}, stream config is: {:#?}", microphone_name, config);
         let (tx, rx) = mpsc::channel(100);
-        let name = self.get_device_name();
         let channels = self.get_device_channels();
         let sample_rate = self.get_device_sample_rate();
         let target_sample_rate = Self::TARGET_SAMPLE_RATE;
         let sample_format = self.get_device_sample_format();
-        let config = self.get_device_config();
-        info!("Start recording on device: {}", name);
-        info!("Device supported stream config: {:#?}", &config);
-        let mut shared_data: Vec<f32> = Vec::new();
+        let mut audio_data_buffer: Vec<f32> = Vec::new();
         let stream = match sample_format {
             SampleFormat::F32 => {
-                info!("Using F32 sample format");
                 self.device.build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &InputCallbackInfo| {
                         if channels == 1 {
-                            shared_data.extend_from_slice(data);
+                            audio_data_buffer.extend_from_slice(data);
                         } else {
                             let mono_data = data.chunks(channels as usize).map(|pair| {
                                 pair.iter().sum::<f32>() / (pair.len() as f32)
                             });
-                            shared_data.extend(mono_data);
+                            audio_data_buffer.extend(mono_data);
                         }
-                        if shared_data.len() >= 3072usize {
+                        if audio_data_buffer.len() >= 3072usize {
                             let mut resampled = if sample_rate != target_sample_rate {
-                                let interpolator = Linear::new(shared_data[0], shared_data[1]);
-                                let source = signal::from_iter(shared_data.iter().cloned());
+                                let interpolator = Linear::new(audio_data_buffer[0], audio_data_buffer[1]);
+                                let source = signal::from_iter(audio_data_buffer.iter().cloned());
                                 let resampled = source.from_hz_to_hz(
                                     interpolator,
                                     sample_rate as f64,
                                     target_sample_rate as f64,
                                 );
-                                let number = shared_data.len() * target_sample_rate as usize / sample_rate as usize;
+                                let number = audio_data_buffer.len() * target_sample_rate as usize / sample_rate as usize;
                                 resampled.take(number).collect()
                             } else {
-                                shared_data.to_vec()
+                                audio_data_buffer.to_vec()
                             };
                             let mut bandpass_filter = BandpassFilter::new(target_sample_rate, 3000f32, 300f32);
                             for sample in resampled.iter_mut() {
@@ -109,7 +107,7 @@ impl Microphone {
                                 error!("Error sending data to channel: {:?}", error);
                                 panic!("Error sending data to channel: {:?}", error)
                             });
-                            shared_data.clear();
+                            audio_data_buffer.clear();
                         }
                     },
                     move |err| {
@@ -140,8 +138,8 @@ impl Microphone {
         }
     }
 
-    fn save_audio_data_to_wav(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<String>) {
-        let (tx, rx) = mpsc::channel::<String>(100);
+    fn save_audio_data_to_wav(&self, mut audio_data_rx: Receiver<Vec<f32>>) -> (JoinHandle<()>, Receiver<Vec<f32>>) {
+        let (tx, rx) = mpsc::channel::<Vec<f32>>(100);
         let predict_gate = 0.75f32;
         let sample_length = 16usize;
         let sample_length_half = sample_length / 2;
@@ -172,16 +170,18 @@ impl Microphone {
                     }
                     let probabilities = &audio_data_buffer.iter().take(sample_length).map(|segment| segment.speech_probability).collect::<Vec<_>>();
                     if audio_data_buffer.len() > sample_length && AudioSegment::is_pause(probabilities) {
+                        let mut file_data: Vec<f32> = Vec::new();
                         let local: chrono::DateTime<Local> = Local::now();
                         let filename = format!("{}.wav", local.format("%Y%m%d %H_%M_%S.%3f"));
                         let wav_spec = wav_writer::get_wav_spec(target_sample_rate, sample_format);
                         let writer = wav_writer::get_wav_writer(output_temp_dir.join(filename.clone()), wav_spec);
                         while !audio_data_buffer.is_empty() {
-                            let audio_data = audio_data_buffer.pop_back().unwrap().audio_data;
-                            wav_writer::write_audio_data_to_wav::<f32, f32>(&writer, &audio_data);
+                            let audio_data: Vec<f32> = audio_data_buffer.pop_back().unwrap().audio_data;
+                            file_data.extend(audio_data);
                         }
+                        wav_writer::write_audio_data_to_wav::<f32, f32>(writer, &file_data);
                         audio_data_buffer.clear();
-                        tx.send(filename).await.unwrap_or_else(|error| {
+                        tx.send(file_data).await.unwrap_or_else(|error| {
                             error!("Error sending filename to channel: {:?}", error);
                         });
                     }
